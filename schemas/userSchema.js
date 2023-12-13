@@ -26,6 +26,14 @@ const UserSigninSchema = Joi.object({
         .required()
 });
 
+
+const UserEmailSchema = Joi.object({
+    email: Joi.string()
+    .pattern(emailRegexp) 
+    .required()
+
+});
+
 const validateBody = (schema) => {
     return (req, res, next) => {
       const { error } = schema.validate(req.body);
@@ -40,5 +48,6 @@ const validateBody = (schema) => {
 module.exports={
     UserSignupSchema,
     UserSigninSchema,
+    UserEmailSchema,
     validateBody
 }

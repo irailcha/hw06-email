@@ -1,50 +1,117 @@
+
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const gravatar = require('gravatar');
+
 const User = require('../models/User');
 const fs = require('fs/promises');
 const Jimp = require("jimp");
 const path = require('path');
 const { HttpError } = require('../helpers/HttpError');
+const {sendEmail}=require('../transporterEmail');
+
+
 
 
 const pathAvatar = path.resolve("public", "avatars");
 
 const register = async (req, res, next) => {
   const { email, password } = req.body;
-  const {path: oldPath, filename} = req.file;
+  const { path: oldPath, filename } = req.file;
   const newPath = path.join(pathAvatar, filename);
 
   await fs.rename(oldPath, newPath);
 
-
   const avatarURL = gravatar.url(email, { s: '200', r: 'pg', d: 'identicon' });
   const image = await Jimp.read(newPath);
-  await image.resize(250, 250); 
+  await image.resize(250, 250);
   await image.writeAsync(newPath);
 
+  const userExists = await User.findOne({ email });
 
-const user = await User.findOne({ email });
-if (user) {
-    return next(HttpError(409, "Email in use"));
+  if (userExists) {
+    return next(HttpError(409, 'Email in use'));
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
+  const uniquNum = new Date().getTime().toString()
+  const verificationCode = uniquNum;
 
-  const newUser = await User.create({ ...req.body,  avatar: avatarURL,  password: hashedPassword });
+  const newUser = await User.create({
+    ...req.body,
+    avatarURL,
+    password: hashedPassword,
+    verificationToken: verificationCode, 
+  });
+
+
+  const verifyEmail = {
+    to: email,
+    subject: 'Verify email',
+    html: `<a target="_blank" href="${process.env.BASE_URL}/users/verify/${verificationCode}">Click to verify email</a>`,
+  };
+
+ await sendEmail(verifyEmail);
+
+
+
 
   res.status(201).json({
     user: {
       email: newUser.email,
       subscription: newUser.subscription,
       avatarURL: newUser.avatarURL
-    }
+
+    },
   });
 
-  if (!email || !password) {
-    return next(HttpError(400, 'Validation error: Email and password are required.'));
-  }
+
 };
+
+
+
+const verify = async (req, res, next) => {
+  const { verificationCode } = req.params;
+  const user = await User.findOne({ verificationCode });
+
+if (!user) {
+  return next(HttpError(404, 'User not found'));
+}
+
+
+await User.findByIdAndUpdate(user._id, {verify: true });
+
+
+res.status(200).json({
+  message: 'Verification successful',
+});
+}
+
+
+
+const resendVerify = async (req, res, next) => {
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) {
+    return next(HttpError(404, "User not found"));
+  }
+  if (user.verify) {
+    return next(HttpError(400, "Verification has already been passed"));
+  }
+  const verifyEmail = {
+      to: email,
+      subject: "Verify email",
+      html: `<a target="_blank" href="${process.env.BASE_URL}/verify/${user.verificationCode}">Click verify email</a>`
+  }
+
+  await sendEmail(verifyEmail);
+
+  res.status(200).json({
+      message: "Verification email sent"
+  })
+}
+
+
 
 
 
@@ -168,6 +235,8 @@ const updateAvatar= async(req, res, next) => {
 
 module.exports = {
   register,
+  verify,
+  resendVerify,
   login,
   current,
   logout,

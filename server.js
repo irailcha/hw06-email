@@ -3,11 +3,11 @@ const app = require('./app');
 
 
 
-const {DB_HOST}=process.env;
 
-mongoose.connect(DB_HOST)
+
+mongoose.connect(process.env.DB_HOST,   {useNewUrlParser: true, useUnifiedTopology: true, ssl: true })
 .then(()=>{
-  app.listen(3000, () => {
+  app.listen(process.env.PORT, () => {
     console.log("Database connection successful")
   })
 })

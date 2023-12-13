@@ -7,9 +7,14 @@ const {upload}=require('../../middlewars/upload');
 
 const { UserSignupSchema, 
     UserSigninSchema, 
+    UserEmailSchema,
     validateBody } = require('../../schemas/userSchema');
 
 authRouter.post("/register", upload.single('avatar'), validateBody(UserSignupSchema), authController.register);
+
+authRouter.get("/verify/:verificationToken", validateBody(UserEmailSchema), authController.verify);
+
+authRouter.post("/verify", authController.resendVerify);
 
 authRouter.post("/login", validateBody(UserSigninSchema), authController.login);
 
